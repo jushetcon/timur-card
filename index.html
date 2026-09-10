@@ -88,6 +88,34 @@
     color: var(--accent);
     margin-right: 8px;
   }
+
+  .pulse-btn {
+    display: block;
+    width: 100%;
+    margin: 24px 0 0;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #08110d;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+
+  .pulse-btn:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+
+  .pulse-count {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    min-height: 1.2em;
+  }
 </style>
 </head>
 <body>
@@ -100,44 +128,69 @@
       <a href="#"><span>✉</span>Почта</a>
       <a href="#" target="_blank" rel="noopener"><span>◆</span>Соцсеть</a>
     </div>
+
+    <button type="button" class="pulse-btn" id="pulseBtn">✨ Нажми меня</button>
+    <p class="pulse-count" id="pulseCount"></p>
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
     (function () {
       var tg = window.Telegram && window.Telegram.WebApp;
-      if (!tg) return; // открыто вне Telegram — работаем как обычная страница
 
-      try { tg.ready(); } catch (e) {}
-      try { tg.expand(); } catch (e) {}
+      if (tg) {
+        try { tg.ready(); } catch (e) {}
+        try { tg.expand(); } catch (e) {}
 
-      var bg = '#0d0f12';
+        var bg = '#0d0f12';
 
-      try {
-        if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.9')) {
-          tg.setHeaderColor(bg);
-          tg.setBackgroundColor(bg);
-        } else if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
-          tg.setHeaderColor('bg_color');
-          tg.setBackgroundColor('bg_color');
-        }
-      } catch (e) {}
+        try {
+          if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.9')) {
+            tg.setHeaderColor(bg);
+            tg.setBackgroundColor(bg);
+          } else if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
+            tg.setHeaderColor('bg_color');
+            tg.setBackgroundColor('bg_color');
+          }
+        } catch (e) {}
 
-      try {
-        if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.disableVerticalSwipes) {
-          tg.disableVerticalSwipes();
-        } else if (tg.enableClosingConfirmation) {
-          tg.enableClosingConfirmation();
-        }
-      } catch (e) {}
+        try {
+          if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && tg.disableVerticalSwipes) {
+            tg.disableVerticalSwipes();
+          } else if (tg.enableClosingConfirmation) {
+            tg.enableClosingConfirmation();
+          }
+        } catch (e) {}
 
-      try {
-        var user = tg.initDataUnsafe && tg.initDataUnsafe.user;
-        var greetingEl = document.getElementById('greeting');
-        if (user && user.first_name && greetingEl) {
-          greetingEl.textContent = 'Привет, ' + user.first_name + '!';
-        }
-      } catch (e) {}
+        try {
+          var user = tg.initDataUnsafe && tg.initDataUnsafe.user;
+          var greetingEl = document.getElementById('greeting');
+          if (user && user.first_name && greetingEl) {
+            greetingEl.textContent = 'Привет, ' + user.first_name + '!';
+          }
+        } catch (e) {}
+      }
+
+      var pulseBtn = document.getElementById('pulseBtn');
+      var pulseCount = document.getElementById('pulseCount');
+      var count = 0;
+
+      if (pulseBtn) {
+        pulseBtn.addEventListener('click', function () {
+          count += 1;
+          if (pulseCount) {
+            pulseCount.textContent = 'Нажатий: ' + count;
+          }
+
+          try {
+            if (tg && tg.HapticFeedback && tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
+              tg.HapticFeedback.impactOccurred('medium');
+            } else if (navigator.vibrate) {
+              navigator.vibrate(50);
+            }
+          } catch (e) {}
+        });
+      }
     })();
   </script>
 </body>
