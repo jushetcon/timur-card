@@ -38,6 +38,13 @@
     width: 100%;
   }
 
+  .greeting {
+    font-size: clamp(1.4rem, 6vw, 2rem);
+    font-weight: 600;
+    margin: 0 0 20px;
+    color: var(--muted);
+  }
+
   h1 {
     font-size: clamp(2.5rem, 10vw, 4rem);
     font-weight: 700;
@@ -85,6 +92,7 @@
 </head>
 <body>
   <div class="card">
+    <p class="greeting" id="greeting">Привет!</p>
     <h1>Тимур</h1>
     <p class="role">вайбкодер</p>
     <div class="links">
@@ -120,6 +128,14 @@
           tg.disableVerticalSwipes();
         } else if (tg.enableClosingConfirmation) {
           tg.enableClosingConfirmation();
+        }
+      } catch (e) {}
+
+      try {
+        var user = tg.initDataUnsafe && tg.initDataUnsafe.user;
+        var greetingEl = document.getElementById('greeting');
+        if (user && user.first_name && greetingEl) {
+          greetingEl.textContent = 'Привет, ' + user.first_name + '!';
         }
       } catch (e) {}
     })();
