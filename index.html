@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Тимур</title>
 <style>
   :root {
@@ -18,18 +18,35 @@
 
   html, body {
     margin: 0;
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
   }
 
   body {
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .screen {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
+  }
+
+  .screen[hidden] {
+    display: none;
   }
 
   .card {
@@ -116,21 +133,61 @@
     font-size: 0.95rem;
     min-height: 1.2em;
   }
+
+  .tabbar {
+    display: flex;
+    flex-shrink: 0;
+    border-top: 1px solid #2a2d33;
+    background: var(--bg);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .tab {
+    flex: 1;
+    min-height: 44px;
+    padding: 10px 8px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tab.active {
+    color: var(--accent);
+  }
 </style>
 </head>
 <body>
-  <div class="card">
-    <p class="greeting" id="greeting">Привет!</p>
-    <h1>Тимур</h1>
-    <p class="role">вайбкодер</p>
-    <div class="links">
-      <a href="https://telegram.org" target="_blank" rel="noopener"><span>✈</span>Telegram</a>
-      <a href="#"><span>✉</span>Почта</a>
-      <a href="#" target="_blank" rel="noopener"><span>◆</span>Соцсеть</a>
-    </div>
+  <div class="app">
+    <main class="screen" id="screen-today">
+      <div class="card">
+        <p class="greeting" id="greeting">Привет!</p>
+        <h1>Тимур</h1>
+        <p class="role">вайбкодер</p>
+        <div class="links">
+          <a href="https://telegram.org" target="_blank" rel="noopener"><span>✈</span>Telegram</a>
+          <a href="#"><span>✉</span>Почта</a>
+          <a href="#" target="_blank" rel="noopener"><span>◆</span>Соцсеть</a>
+        </div>
 
-    <button type="button" class="pulse-btn" id="pulseBtn">✨ Нажми меня</button>
-    <p class="pulse-count" id="pulseCount"></p>
+        <button type="button" class="pulse-btn" id="pulseBtn">✨ Нажми меня</button>
+        <p class="pulse-count" id="pulseCount"></p>
+      </div>
+    </main>
+
+    <main class="screen" id="screen-habits" hidden>
+      <div class="card">
+        <h1>Привычки</h1>
+      </div>
+    </main>
+
+    <nav class="tabbar">
+      <button type="button" class="tab active" id="tab-today" data-screen="today">Сегодня</button>
+      <button type="button" class="tab" id="tab-habits" data-screen="habits">Привычки</button>
+    </nav>
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -191,6 +248,26 @@
           } catch (e) {}
         });
       }
+
+      var tabs = document.querySelectorAll('.tab');
+      var screens = {
+        today: document.getElementById('screen-today'),
+        habits: document.getElementById('screen-habits')
+      };
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          var target = tab.getAttribute('data-screen');
+
+          tabs.forEach(function (t) {
+            t.classList.toggle('active', t === tab);
+          });
+
+          Object.keys(screens).forEach(function (key) {
+            screens[key].hidden = key !== target;
+          });
+        });
+      });
     })();
   </script>
 </body>
