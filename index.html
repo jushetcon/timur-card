@@ -301,16 +301,6 @@
     <main class="screen" id="screen-today">
       <div class="card">
         <p class="greeting" id="greeting">Привет!</p>
-        <h1>Тимур</h1>
-        <p class="role">вайбкодер</p>
-        <div class="links">
-          <a href="https://telegram.org" target="_blank" rel="noopener"><span>✈</span>Telegram</a>
-          <a href="#"><span>✉</span>Почта</a>
-          <a href="#" target="_blank" rel="noopener"><span>◆</span>Соцсеть</a>
-        </div>
-
-        <button type="button" class="pulse-btn" id="pulseBtn">✨ Нажми меня</button>
-        <p class="pulse-count" id="pulseCount"></p>
 
         <div class="today-habits">
           <p class="progress-line" id="progressLine" hidden></p>
@@ -334,9 +324,25 @@
       </div>
     </main>
 
+    <main class="screen" id="screen-contacts" hidden>
+      <div class="card">
+        <h1>Тимур</h1>
+        <p class="role">вайбкодер</p>
+        <div class="links">
+          <a href="https://telegram.org" target="_blank" rel="noopener"><span>✈</span>Telegram</a>
+          <a href="#"><span>✉</span>Почта</a>
+          <a href="#" target="_blank" rel="noopener"><span>◆</span>Соцсеть</a>
+        </div>
+
+        <button type="button" class="pulse-btn" id="pulseBtn">✨ Нажми меня</button>
+        <p class="pulse-count" id="pulseCount"></p>
+      </div>
+    </main>
+
     <nav class="tabbar">
       <button type="button" class="tab active" id="tab-today" data-screen="today">Сегодня</button>
       <button type="button" class="tab" id="tab-habits" data-screen="habits">Привычки</button>
+      <button type="button" class="tab" id="tab-contacts" data-screen="contacts">Контакты</button>
     </nav>
   </div>
 
@@ -409,7 +415,8 @@
       var tabs = document.querySelectorAll('.tab');
       var screens = {
         today: document.getElementById('screen-today'),
-        habits: document.getElementById('screen-habits')
+        habits: document.getElementById('screen-habits'),
+        contacts: document.getElementById('screen-contacts')
       };
 
       tabs.forEach(function (tab) {
