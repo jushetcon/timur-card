@@ -302,9 +302,31 @@
     text-align: center;
     margin: 0;
   }
+
+  .sync-notice {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 32px);
+    background: #2a2d33;
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+  }
+
+  .sync-notice[hidden] {
+    display: none;
+  }
 </style>
 </head>
 <body>
+  <p class="sync-notice" id="syncNotice" hidden></p>
+
   <div class="app">
     <main class="screen" id="screen-today">
       <div class="card">
@@ -709,6 +731,33 @@
 
       renderHabits();
 
+      // --- видимые уведомления о сбоях ---
+      // короткое человеческое сообщение — на экране; полная техническая
+      // причина — всегда в консоли браузера (F12 → Console), чтобы её
+      // можно было найти, а не только гадать, что случилось.
+
+      var syncNoticeEl = document.getElementById('syncNotice');
+      var syncNoticeTimer = null;
+
+      function showSyncNotice(text) {
+        if (!syncNoticeEl) return;
+        syncNoticeEl.textContent = text;
+        syncNoticeEl.hidden = false;
+        if (syncNoticeTimer) clearTimeout(syncNoticeTimer);
+        syncNoticeTimer = setTimeout(function () {
+          syncNoticeEl.hidden = true;
+        }, 4000);
+      }
+
+      function logSyncFailure(context, err, responseJson) {
+        // полный текст — в консоль, для отладки
+        console.error('[habits sync] ' + context, {
+          error: err,
+          serverCode: responseJson && responseJson.code,
+          serverMessage: responseJson && responseJson.message
+        });
+      }
+
       // --- синхронизация с сервером (/api/habits → Supabase) ---
       // работает только внутри Telegram: там есть initData, которым сервер
       // проверяет личность. Вне Telegram — обычное поведение на localStorage,
@@ -735,8 +784,17 @@
             data: { version: STORAGE_VERSION, habits: state.habits }
           })
         })
-          .catch(function () {
-            // сеть недоступна — просто попробуем при следующем изменении
+          .then(function (r) {
+            if (r.ok) return null;
+            return r.json().catch(function () { return null; }).then(function (json) {
+              logSyncFailure('не удалось сохранить (write)', 'HTTP ' + r.status, json);
+              showSyncNotice('Не получилось сохранить, попробую ещё раз');
+            });
+          })
+          .catch(function (err) {
+            // сеть недоступна — приложение продолжает работать с тем, что уже есть
+            logSyncFailure('не удалось сохранить (write) — сеть недоступна', err, null);
+            showSyncNotice('Нет связи с сервером. Попробую сохранить позже');
           })
           .then(function () {
             syncInFlight = false;
@@ -765,9 +823,19 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ initData: tg.initData, action: 'read' })
         })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (json) {
-            if (!json || !json.ok) return;
+          .then(function (r) {
+            return r.json().catch(function () { return null; }).then(function (json) {
+              return { ok: r.ok, json: json };
+            });
+          })
+          .then(function (result) {
+            var json = result.json;
+
+            if (!result.ok || !json || !json.ok) {
+              logSyncFailure('не удалось загрузить (read)', 'HTTP-ответ не ok', json);
+              showSyncNotice('Не получилось загрузить последние данные. Показываю то, что есть');
+              return;
+            }
 
             var remote = json.data;
 
@@ -785,8 +853,10 @@
             });
             renderHabits();
           })
-          .catch(function () {
-            // сеть недоступна — показываем то, что уже загружено локально
+          .catch(function (err) {
+            // сеть недоступна — показываем то, что уже загружено локально, экран не пустой
+            logSyncFailure('не удалось загрузить (read) — сеть недоступна', err, null);
+            showSyncNotice('Нет связи с сервером. Показываю то, что есть');
           });
       }
 
