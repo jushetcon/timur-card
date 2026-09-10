@@ -7,55 +7,7 @@
 // тело ответа Supabase, стек ошибки) всегда пишется через console.error —
 // её видно в логах функции на Vercel (Vercel Dashboard → проект → Logs, или
 // `vercel logs`), но никогда не уходит клиенту.
-var crypto = require('crypto');
-
-// Проверка подписи initData по алгоритму Telegram:
-// https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
-function verifyTelegramInitData(initData, botToken) {
-  if (!initData || typeof initData !== 'string') return null;
-
-  var params;
-  try {
-    params = new URLSearchParams(initData);
-  } catch (e) {
-    return null;
-  }
-
-  var hash = params.get('hash');
-  if (!hash) return null;
-  params.delete('hash');
-
-  var pairs = [];
-  params.forEach(function (value, key) {
-    pairs.push(key + '=' + value);
-  });
-  pairs.sort();
-  var dataCheckString = pairs.join('\n');
-
-  var secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-  var computedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-
-  var a = Buffer.from(computedHash, 'utf8');
-  var b = Buffer.from(hash, 'utf8');
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-
-  // отклоняем слишком старые initData (больше суток) — на случай повторного использования
-  var authDate = Number(params.get('auth_date'));
-  if (!authDate || Math.floor(Date.now() / 1000) - authDate > 86400) return null;
-
-  var userJson = params.get('user');
-  if (!userJson) return null;
-
-  var user;
-  try {
-    user = JSON.parse(userJson);
-  } catch (e) {
-    return null;
-  }
-  if (!user || typeof user.id !== 'number') return null;
-
-  return { id: user.id };
-}
+var verifyTelegramInitData = require('./_lib/telegram').verifyTelegramInitData;
 
 async function readHabits(supabaseUrl, serviceKey, tgId) {
   var url = supabaseUrl + '/rest/v1/habits?tg_id=eq.' + tgId + '&select=data&limit=1';

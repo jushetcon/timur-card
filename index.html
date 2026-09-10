@@ -133,6 +133,16 @@
     opacity: 0.9;
   }
 
+  .pulse-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .buy-btn {
+    background: #f5a623;
+    color: #2b1a00;
+  }
+
   .pulse-count {
     margin: 12px 0 0;
     color: var(--muted);
@@ -366,6 +376,8 @@
 
         <button type="button" class="pulse-btn" id="pulseBtn">✨ Нажми меня</button>
         <p class="pulse-count" id="pulseCount"></p>
+
+        <button type="button" class="pulse-btn buy-btn" id="buyBtn">⭐ Купить</button>
       </div>
     </main>
 
@@ -437,6 +449,70 @@
             pulseCount.textContent = 'Нажатий: ' + count;
           }
           haptic('medium');
+        });
+      }
+
+      // --- кнопка "Купить" (оплата звёздами Telegram) ---
+
+      var buyBtn = document.getElementById('buyBtn');
+
+      if (buyBtn) {
+        buyBtn.addEventListener('click', function () {
+          if (buyBtn.disabled) return; // не даём выставить два счёта подряд
+
+          if (!canSync) {
+            // вне Telegram платить негде и не через что подтвердить личность — это нормально
+            showSyncNotice('Оплата доступна только в Telegram');
+            return;
+          }
+
+          if (typeof tg.openInvoice !== 'function') {
+            showSyncNotice('Эта версия Telegram не поддерживает оплату');
+            return;
+          }
+
+          buyBtn.disabled = true;
+          haptic('light');
+
+          fetch('/api/pay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: tg.initData })
+          })
+            .then(function (r) {
+              return r.json().catch(function () { return null; }).then(function (json) {
+                return { ok: r.ok, json: json };
+              });
+            })
+            .then(function (result) {
+              var json = result.json;
+
+              if (!result.ok || !json || !json.ok || !json.link) {
+                logSyncFailure('не удалось создать счёт (pay)', 'HTTP-ответ не ok', json);
+                showSyncNotice((json && json.message) || 'Не получилось создать счёт, попробуй ещё раз');
+                buyBtn.disabled = false;
+                return;
+              }
+
+              try {
+                tg.openInvoice(json.link, function (status) {
+                  // status: 'paid' | 'cancelled' | 'failed' | 'pending'
+                  // закрыл ли человек окно оплаты, оплатил ли — в любом случае
+                  // спокойно возвращаемся и разблокируем кнопку, без ошибок
+                  console.log('[pay] окно оплаты закрыто со статусом:', status);
+                  buyBtn.disabled = false;
+                });
+              } catch (e) {
+                logSyncFailure('не удалось открыть окно оплаты (openInvoice)', e, null);
+                showSyncNotice('Не получилось открыть окно оплаты');
+                buyBtn.disabled = false;
+              }
+            })
+            .catch(function (err) {
+              logSyncFailure('не удалось создать счёт (pay) — сеть недоступна', err, null);
+              showSyncNotice('Нет связи с сервером. Попробуй ещё раз');
+              buyBtn.disabled = false;
+            });
         });
       }
 
