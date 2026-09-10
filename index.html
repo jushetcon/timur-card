@@ -770,8 +770,15 @@
             if (!json || !json.ok) return;
 
             var remote = json.data;
-            // строки в базе ещё нет — оставляем то, что уже показано (из localStorage)
-            if (!remote || !Array.isArray(remote.habits)) return;
+
+            if (!remote || !Array.isArray(remote.habits)) {
+              // строки в базе ещё нет — это первый запуск для этого человека.
+              // переносим то, что уже накопилось локально в localStorage
+              if (state.habits.length > 0) {
+                scheduleSync();
+              }
+              return;
+            }
 
             state.habits = remote.habits.filter(function (h) {
               return h && typeof h.id === 'string' && typeof h.name === 'string' && Array.isArray(h.dates);
