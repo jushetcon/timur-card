@@ -563,11 +563,13 @@
         idCounter += 1;
         state.habits.push({ id: 'habit-' + Date.now() + '-' + idCounter, name: name, dates: [] });
         renderHabits();
+        scheduleSync();
       }
 
       function removeHabit(id) {
         state.habits = state.habits.filter(function (h) { return h.id !== id; });
         renderHabits();
+        scheduleSync();
       }
 
       function toggleHabit(id) {
@@ -584,6 +586,7 @@
           return Object.assign({}, h, { dates: dates });
         });
         renderHabits();
+        scheduleSync();
       }
 
       function renderHabitsScreen() {
@@ -705,6 +708,82 @@
       }
 
       renderHabits();
+
+      // --- синхронизация с сервером (/api/habits → Supabase) ---
+      // работает только внутри Telegram: там есть initData, которым сервер
+      // проверяет личность. Вне Telegram — обычное поведение на localStorage,
+      // без сетевых запросов. localStorage при этом продолжает вестись как раньше.
+
+      var canSync = !!(tg && tg.initData);
+      var syncTimer = null;
+      var syncInFlight = false;
+      var syncPending = false;
+
+      function performSync() {
+        if (syncInFlight) {
+          syncPending = true;
+          return;
+        }
+        syncInFlight = true;
+
+        fetch('/api/habits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initData: tg.initData,
+            action: 'write',
+            data: { version: STORAGE_VERSION, habits: state.habits }
+          })
+        })
+          .catch(function () {
+            // сеть недоступна — просто попробуем при следующем изменении
+          })
+          .then(function () {
+            syncInFlight = false;
+            if (syncPending) {
+              syncPending = false;
+              scheduleSync();
+            }
+          });
+      }
+
+      // не чаще раза в секунду: собираем все изменения за эту секунду в один запрос
+      function scheduleSync() {
+        if (!canSync) return;
+        if (syncTimer) return;
+        syncTimer = setTimeout(function () {
+          syncTimer = null;
+          performSync();
+        }, 1000);
+      }
+
+      function loadFromServer() {
+        if (!canSync) return;
+
+        fetch('/api/habits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData, action: 'read' })
+        })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (json) {
+            if (!json || !json.ok) return;
+
+            var remote = json.data;
+            // строки в базе ещё нет — оставляем то, что уже показано (из localStorage)
+            if (!remote || !Array.isArray(remote.habits)) return;
+
+            state.habits = remote.habits.filter(function (h) {
+              return h && typeof h.id === 'string' && typeof h.name === 'string' && Array.isArray(h.dates);
+            });
+            renderHabits();
+          })
+          .catch(function () {
+            // сеть недоступна — показываем то, что уже загружено локально
+          });
+      }
+
+      loadFromServer();
     })();
   </script>
 </body>
