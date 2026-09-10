@@ -434,14 +434,52 @@
       });
 
       // --- состояние привычек: единственный источник правды ---
-      // ничего не сохраняется — после перезагрузки страницы список снова пуст
+      // хранится в localStorage одной записью под ключом STORAGE_KEY
 
-      var state = { habits: [] };
+      var STORAGE_KEY = 'habits-app';
+      var STORAGE_VERSION = 1;
+
+      function loadState() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { habits: [] };
+
+          var parsed = JSON.parse(raw);
+
+          if (!parsed || typeof parsed !== 'object') return { habits: [] };
+          if (parsed.version !== STORAGE_VERSION) return { habits: [] };
+          if (!Array.isArray(parsed.habits)) return { habits: [] };
+
+          var habits = parsed.habits
+            .filter(function (h) {
+              return h && typeof h.id === 'string' && typeof h.name === 'string' && typeof h.done === 'boolean';
+            })
+            .map(function (h) {
+              return { id: h.id, name: h.name, done: h.done };
+            });
+
+          return { habits: habits };
+        } catch (e) {
+          // мусор в хранилище или данные старого формата — начинаем с пустого списка
+          return { habits: [] };
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            version: STORAGE_VERSION,
+            habits: state.habits
+          }));
+        } catch (e) {}
+      }
+
+      var state = loadState();
       var idCounter = 0;
 
       function addHabit(name) {
         idCounter += 1;
-        state.habits.push({ id: 'habit-' + idCounter, name: name, done: false });
+        state.habits.push({ id: 'habit-' + Date.now() + '-' + idCounter, name: name, done: false });
         renderHabits();
       }
 
@@ -534,6 +572,7 @@
       function renderHabits() {
         renderHabitsScreen();
         renderTodayScreen();
+        saveState();
       }
 
       var habitForm = document.getElementById('habitForm');
