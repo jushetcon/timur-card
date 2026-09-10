@@ -288,6 +288,14 @@
     color: #08110d;
   }
 
+  .habit-streak {
+    flex-shrink: 0;
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
   .empty-note {
     color: var(--muted);
     font-size: 0.95rem;
@@ -433,11 +441,64 @@
         });
       });
 
+      // --- даты по местному времени устройства (не UTC) ---
+
+      function formatDateLocal(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+      }
+
+      function todayStr() {
+        return formatDateLocal(new Date());
+      }
+
+      function parseDateStr(s) {
+        var parts = s.split('-').map(Number);
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+      }
+
+      function addDaysToDateStr(s, delta) {
+        var d = parseDateStr(s);
+        d.setDate(d.getDate() + delta);
+        return formatDateLocal(d);
+      }
+
+      // серия: сколько дней подряд, идущих без пропуска назад от последней отметки.
+      // если последняя отметка старше вчерашней — серии больше нет (0), не в полночь,
+      // а по факту пропуска целого дня.
+      function computeStreak(dates) {
+        if (!dates || dates.length === 0) return 0;
+
+        var set = {};
+        dates.forEach(function (d) { set[d] = true; });
+
+        var last = null;
+        Object.keys(set).forEach(function (d) {
+          if (!last || d > last) last = d;
+        });
+
+        var today = todayStr();
+        var yesterday = addDaysToDateStr(today, -1);
+        if (last !== today && last !== yesterday) return 0;
+
+        var streak = 0;
+        var cursor = last;
+        while (set[cursor]) {
+          streak += 1;
+          cursor = addDaysToDateStr(cursor, -1);
+        }
+        return streak;
+      }
+
       // --- состояние привычек: единственный источник правды ---
-      // хранится в localStorage одной записью под ключом STORAGE_KEY
+      // хранится в localStorage одной записью под ключом STORAGE_KEY.
+      // у каждой привычки — список дат выполнения (ГГГГ-ММ-ДД, по местному времени)
 
       var STORAGE_KEY = 'habits-app';
-      var STORAGE_VERSION = 1;
+      var STORAGE_VERSION = 2;
+      var LEGACY_VERSION_WITH_DONE_FLAG = 1;
 
       function loadState() {
         try {
@@ -446,21 +507,42 @@
 
           var parsed = JSON.parse(raw);
 
-          if (!parsed || typeof parsed !== 'object') return { habits: [] };
-          if (parsed.version !== STORAGE_VERSION) return { habits: [] };
-          if (!Array.isArray(parsed.habits)) return { habits: [] };
+          if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.habits)) {
+            return { habits: [] };
+          }
 
-          var habits = parsed.habits
-            .filter(function (h) {
-              return h && typeof h.id === 'string' && typeof h.name === 'string' && typeof h.done === 'boolean';
-            })
-            .map(function (h) {
-              return { id: h.id, name: h.name, done: h.done };
-            });
+          if (parsed.version === STORAGE_VERSION) {
+            var habits = parsed.habits
+              .filter(function (h) {
+                return h && typeof h.id === 'string' && typeof h.name === 'string' && Array.isArray(h.dates);
+              })
+              .map(function (h) {
+                return {
+                  id: h.id,
+                  name: h.name,
+                  dates: h.dates.filter(function (d) { return typeof d === 'string'; })
+                };
+              });
+            return { habits: habits };
+          }
 
-          return { habits: habits };
+          if (parsed.version === LEGACY_VERSION_WITH_DONE_FLAG) {
+            // старый формат: было done true/false — переносим как отметку за сегодня
+            var today = todayStr();
+            var migrated = parsed.habits
+              .filter(function (h) {
+                return h && typeof h.id === 'string' && typeof h.name === 'string' && typeof h.done === 'boolean';
+              })
+              .map(function (h) {
+                return { id: h.id, name: h.name, dates: h.done ? [today] : [] };
+              });
+            return { habits: migrated };
+          }
+
+          // незнакомая версия формата — начинаем с пустого списка
+          return { habits: [] };
         } catch (e) {
-          // мусор в хранилище или данные старого формата — начинаем с пустого списка
+          // мусор в хранилище — начинаем с пустого списка
           return { habits: [] };
         }
       }
@@ -479,7 +561,7 @@
 
       function addHabit(name) {
         idCounter += 1;
-        state.habits.push({ id: 'habit-' + Date.now() + '-' + idCounter, name: name, done: false });
+        state.habits.push({ id: 'habit-' + Date.now() + '-' + idCounter, name: name, dates: [] });
         renderHabits();
       }
 
@@ -489,8 +571,17 @@
       }
 
       function toggleHabit(id) {
+        var today = todayStr();
         state.habits = state.habits.map(function (h) {
-          return h.id === id ? Object.assign({}, h, { done: !h.done }) : h;
+          if (h.id !== id) return h;
+          var dates = h.dates.slice();
+          var idx = dates.indexOf(today);
+          if (idx === -1) {
+            dates.push(today);
+          } else {
+            dates.splice(idx, 1);
+          }
+          return Object.assign({}, h, { dates: dates });
         });
         renderHabits();
       }
@@ -541,17 +632,21 @@
         empty.hidden = true;
         progress.hidden = false;
 
-        var doneCount = state.habits.filter(function (h) { return h.done; }).length;
+        var today = todayStr();
+        var doneCount = state.habits.filter(function (h) { return h.dates.indexOf(today) !== -1; }).length;
         progress.textContent = 'Сделано ' + doneCount + ' из ' + state.habits.length;
 
         state.habits.forEach(function (h) {
+          var doneToday = h.dates.indexOf(today) !== -1;
+          var streak = computeStreak(h.dates);
+
           var li = document.createElement('li');
           li.className = 'habit-row';
 
           var toggle = document.createElement('button');
           toggle.type = 'button';
-          toggle.className = 'habit-toggle' + (h.done ? ' done' : '');
-          toggle.setAttribute('aria-pressed', h.done ? 'true' : 'false');
+          toggle.className = 'habit-toggle' + (doneToday ? ' done' : '');
+          toggle.setAttribute('aria-pressed', doneToday ? 'true' : 'false');
           toggle.setAttribute('aria-label', h.name);
           toggle.textContent = '✓';
           toggle.addEventListener('click', function () {
@@ -560,13 +655,31 @@
           });
 
           var name = document.createElement('span');
-          name.className = 'habit-row-name' + (h.done ? ' done' : '');
+          name.className = 'habit-row-name' + (doneToday ? ' done' : '');
           name.textContent = h.name;
 
           li.appendChild(toggle);
           li.appendChild(name);
+
+          // серию длиной 0 или 1 день не показываем — это ещё не достижение
+          if (streak >= 2) {
+            var streakEl = document.createElement('span');
+            streakEl.className = 'habit-streak';
+            streakEl.textContent = streak + ' ' + daysLabel(streak) + ' подряд';
+            li.appendChild(streakEl);
+          }
+
           list.appendChild(li);
         });
+      }
+
+      // склонение слова "день" под число (1 день, 2-4 дня, 5+ дней)
+      function daysLabel(n) {
+        var mod10 = n % 10;
+        var mod100 = n % 100;
+        if (mod10 === 1 && mod100 !== 11) return 'день';
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня';
+        return 'дней';
       }
 
       function renderHabits() {
