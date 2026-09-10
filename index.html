@@ -661,8 +661,8 @@
           li.appendChild(toggle);
           li.appendChild(name);
 
-          // серию длиной 0 или 1 день не показываем — это ещё не достижение
-          if (streak >= 2) {
+          // серию нулевой длины (сброшенную) не показываем
+          if (streak >= 1) {
             var streakEl = document.createElement('span');
             streakEl.className = 'habit-streak';
             streakEl.textContent = streak + ' ' + daysLabel(streak) + ' подряд';
