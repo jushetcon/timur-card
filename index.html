@@ -501,6 +501,13 @@
                   // спокойно возвращаемся и разблокируем кнопку, без ошибок
                   console.log('[pay] окно оплаты закрыто со статусом:', status);
                   buyBtn.disabled = false;
+
+                  if (status === 'paid') {
+                    // не верим окну оплаты на слово — переспрашиваем сервер,
+                    // уведомление об оплате доходит до него не мгновенно
+                    showSyncNotice('Оплата прошла, проверяем доступ…');
+                    pollPaymentAccess(5);
+                  }
                 });
               } catch (e) {
                 logSyncFailure('не удалось открыть окно оплаты (openInvoice)', e, null);
@@ -514,6 +521,44 @@
               buyBtn.disabled = false;
             });
         });
+      }
+
+      // спрашиваем сервер, открылся ли доступ, с паузой в секунду —
+      // уведомление от Telegram о платеже доходит до сервера не мгновенно
+      function pollPaymentAccess(attemptsLeft) {
+        if (attemptsLeft <= 0) {
+          showSyncNotice('Деньги списаны, доступ вот-вот появится. Если за пару минут не появится — напиши нашему боту');
+          return;
+        }
+
+        fetch('/api/pay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData, action: 'status' })
+        })
+          .then(function (r) {
+            return r.json().catch(function () { return null; }).then(function (json) {
+              return { ok: r.ok, json: json };
+            });
+          })
+          .then(function (result) {
+            var json = result.json;
+
+            if (result.ok && json && json.ok && json.hasAccess) {
+              showSyncNotice('Готово! Доступ открыт 🎉');
+              return;
+            }
+
+            if (!result.ok || !json || !json.ok) {
+              logSyncFailure('не удалось проверить доступ (pay status)', 'HTTP-ответ не ok', json);
+            }
+
+            setTimeout(function () { pollPaymentAccess(attemptsLeft - 1); }, 1000);
+          })
+          .catch(function (err) {
+            logSyncFailure('не удалось проверить доступ (pay status) — сеть недоступна', err, null);
+            setTimeout(function () { pollPaymentAccess(attemptsLeft - 1); }, 1000);
+          });
       }
 
       // --- переключение экранов ---
