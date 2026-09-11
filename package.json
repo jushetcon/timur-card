@@ -1,0 +1,7 @@
+{
+  "name": "test-app-prl33",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": ">=0.32.0"
+  }
+}

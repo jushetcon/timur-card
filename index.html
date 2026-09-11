@@ -149,6 +149,24 @@
     color: #8a7a5f;
   }
 
+  .insight-btn {
+    background: #7c6cf5;
+    color: #f2f2f2;
+    margin-top: 32px;
+  }
+
+  .insight-btn:disabled {
+    opacity: 0.7;
+  }
+
+  .insight-text {
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: left;
+    white-space: pre-line;
+  }
+
   .consent-row {
     display: flex;
     align-items: flex-start;
@@ -381,6 +399,9 @@
           <ul class="habit-list" id="todayList"></ul>
           <p class="empty-note" id="todayEmpty" hidden>Заведи привычки на соседнем экране</p>
         </div>
+
+        <button type="button" class="pulse-btn insight-btn" id="insightBtn">🧠 Разбор недели</button>
+        <p class="insight-text" id="insightText"></p>
       </div>
     </main>
 
@@ -514,6 +535,58 @@
           openExternalLink(a.getAttribute('href'));
         });
       });
+
+      // --- кнопка "Разбор недели" (ИИ-разбор отметок за 7 дней) ---
+
+      var insightBtn = document.getElementById('insightBtn');
+      var insightText = document.getElementById('insightText');
+      var insightInFlight = false;
+
+      if (insightBtn) {
+        insightBtn.addEventListener('click', function () {
+          if (insightInFlight) return;
+
+          if (!canSync) {
+            showSyncNotice('Разбор недели доступен только в Telegram');
+            return;
+          }
+
+          insightInFlight = true;
+          insightBtn.disabled = true;
+          insightText.textContent = 'Собираю разбор недели…';
+          haptic('light');
+
+          fetch('/api/insight', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: tg.initData })
+          })
+            .then(function (r) {
+              return r.json().catch(function () { return null; }).then(function (json) {
+                return { ok: r.ok, json: json };
+              });
+            })
+            .then(function (result) {
+              var json = result.json;
+              insightInFlight = false;
+              insightBtn.disabled = false;
+
+              if (!result.ok || !json || !json.ok) {
+                logSyncFailure('не удалось получить разбор недели (insight)', 'HTTP-ответ не ok', json);
+                insightText.textContent = (json && json.message) || 'Не получилось получить разбор, попробуй ещё раз';
+                return;
+              }
+
+              insightText.textContent = json.text;
+            })
+            .catch(function (err) {
+              insightInFlight = false;
+              insightBtn.disabled = false;
+              logSyncFailure('не удалось получить разбор недели (insight) — сеть недоступна', err, null);
+              insightText.textContent = 'Нет связи с сервером. Попробуй ещё раз';
+            });
+        });
+      }
 
       // --- кнопка "Купить" (оплата звёздами Telegram) ---
 
