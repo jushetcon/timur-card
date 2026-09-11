@@ -6,7 +6,7 @@ var verifyTelegramInitData = require('./_lib/telegram').verifyTelegramInitData;
 // Единственное место, где меняется цена — просто поменяй число.
 // Для валюты XTR (звёзды) amount — это количество звёзд напрямую,
 // без умножения на 100, как для обычных валют.
-var STARS_PRICE = 50;
+var STARS_PRICE = 1;
 
 async function hasPaid(supabaseUrl, serviceKey, tgId) {
   var url = supabaseUrl + '/rest/v1/payments?tg_id=eq.' + tgId + '&select=charge_id&limit=1';
