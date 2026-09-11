@@ -456,6 +456,12 @@
 
       var buyBtn = document.getElementById('buyBtn');
 
+      function markPurchased() {
+        if (!buyBtn) return;
+        buyBtn.disabled = true;
+        buyBtn.textContent = '✓ Куплено';
+      }
+
       if (buyBtn) {
         buyBtn.addEventListener('click', function () {
           if (buyBtn.disabled) return; // не даём выставить два счёта подряд
@@ -545,6 +551,7 @@
             var json = result.json;
 
             if (result.ok && json && json.ok && json.hasAccess) {
+              markPurchased();
               showSyncNotice('Готово! Доступ открыт 🎉');
               return;
             }
@@ -982,6 +989,33 @@
       }
 
       loadFromServer();
+
+      // проверяем при запуске, нет ли уже доступа — чтобы кнопка "Купить"
+      // сразу показывала правильное состояние и не давала заплатить второй раз
+      if (canSync) {
+        fetch('/api/pay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData, action: 'status' })
+        })
+          .then(function (r) {
+            return r.json().catch(function () { return null; }).then(function (json) {
+              return { ok: r.ok, json: json };
+            });
+          })
+          .then(function (result) {
+            var json = result.json;
+            if (result.ok && json && json.ok && json.hasAccess) {
+              markPurchased();
+            } else if (!result.ok || !json || !json.ok) {
+              logSyncFailure('не удалось проверить доступ при запуске (pay status)', 'HTTP-ответ не ok', json);
+            }
+          })
+          .catch(function (err) {
+            // сеть недоступна — оставляем кнопку как есть, пользователь может попробовать позже
+            logSyncFailure('не удалось проверить доступ при запуске (pay status) — сеть недоступна', err, null);
+          });
+      }
     })();
   </script>
 </body>
