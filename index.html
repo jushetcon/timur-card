@@ -141,6 +141,40 @@
   .buy-btn {
     background: #f5a623;
     color: #2b1a00;
+    margin-top: 0;
+  }
+
+  .buy-btn:disabled {
+    background: #4a3a1f;
+    color: #8a7a5f;
+  }
+
+  .consent-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 24px 0 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .consent-row input {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    accent-color: var(--accent);
+  }
+
+  .consent-row span {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  .legal-link {
+    color: var(--accent);
+    text-decoration: underline;
   }
 
   .pulse-count {
@@ -377,7 +411,17 @@
         <button type="button" class="pulse-btn" id="pulseBtn">✨ Нажми меня</button>
         <p class="pulse-count" id="pulseCount"></p>
 
-        <button type="button" class="pulse-btn buy-btn" id="buyBtn">⭐ Купить</button>
+        <label class="consent-row">
+          <input type="checkbox" id="consentCheckbox">
+          <span>
+            Я согласен с
+            <a href="legal/oferta.html" class="legal-link" data-legal>офертой</a>,
+            <a href="legal/privacy.html" class="legal-link" data-legal>политикой конфиденциальности</a>
+            и <a href="legal/consent.html" class="legal-link" data-legal>согласием на обработку персональных данных</a>
+          </span>
+        </label>
+
+        <button type="button" class="pulse-btn buy-btn" id="buyBtn" disabled>⭐ Купить</button>
       </div>
     </main>
 
@@ -452,19 +496,63 @@
         });
       }
 
+      // --- согласие с юридическими документами: открываем ссылки внутри
+      // Telegram (tg.openLink), а не как обычный переход по ссылке ---
+
+      function openExternalLink(url) {
+        var absoluteUrl = new URL(url, window.location.href).href;
+        if (tg && typeof tg.openLink === 'function') {
+          tg.openLink(absoluteUrl);
+        } else {
+          window.open(absoluteUrl, '_blank', 'noopener');
+        }
+      }
+
+      document.querySelectorAll('[data-legal]').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          openExternalLink(a.getAttribute('href'));
+        });
+      });
+
       // --- кнопка "Купить" (оплата звёздами Telegram) ---
 
       var buyBtn = document.getElementById('buyBtn');
+      var consentCheckbox = document.getElementById('consentCheckbox');
+      var purchased = false;
+      var payRequestInFlight = false;
+
+      // без галочки согласия оплата не начинается вообще
+      function syncBuyButtonState() {
+        if (!buyBtn) return;
+        if (purchased) {
+          buyBtn.disabled = true;
+          return;
+        }
+        buyBtn.disabled = payRequestInFlight || !(consentCheckbox && consentCheckbox.checked);
+      }
 
       function markPurchased() {
         if (!buyBtn) return;
-        buyBtn.disabled = true;
+        purchased = true;
         buyBtn.textContent = '✓ Куплено';
+        syncBuyButtonState();
       }
+
+      if (consentCheckbox) {
+        consentCheckbox.addEventListener('change', syncBuyButtonState);
+      }
+
+      syncBuyButtonState();
 
       if (buyBtn) {
         buyBtn.addEventListener('click', function () {
           if (buyBtn.disabled) return; // не даём выставить два счёта подряд
+
+          if (!consentCheckbox || !consentCheckbox.checked) {
+            showSyncNotice('Сначала прими условия оферты и согласие на обработку данных');
+            return;
+          }
 
           if (!canSync) {
             // вне Telegram платить негде и не через что подтвердить личность — это нормально
@@ -477,7 +565,8 @@
             return;
           }
 
-          buyBtn.disabled = true;
+          payRequestInFlight = true;
+          syncBuyButtonState();
           haptic('light');
 
           fetch('/api/pay', {
@@ -496,7 +585,8 @@
               if (!result.ok || !json || !json.ok || !json.link) {
                 logSyncFailure('не удалось создать счёт (pay)', 'HTTP-ответ не ok', json);
                 showSyncNotice((json && json.message) || 'Не получилось создать счёт, попробуй ещё раз');
-                buyBtn.disabled = false;
+                payRequestInFlight = false;
+                syncBuyButtonState();
                 return;
               }
 
@@ -506,7 +596,8 @@
                   // закрыл ли человек окно оплаты, оплатил ли — в любом случае
                   // спокойно возвращаемся и разблокируем кнопку, без ошибок
                   console.log('[pay] окно оплаты закрыто со статусом:', status);
-                  buyBtn.disabled = false;
+                  payRequestInFlight = false;
+                  syncBuyButtonState();
 
                   if (status === 'paid') {
                     // не верим окну оплаты на слово — переспрашиваем сервер,
@@ -518,13 +609,15 @@
               } catch (e) {
                 logSyncFailure('не удалось открыть окно оплаты (openInvoice)', e, null);
                 showSyncNotice('Не получилось открыть окно оплаты');
-                buyBtn.disabled = false;
+                payRequestInFlight = false;
+                syncBuyButtonState();
               }
             })
             .catch(function (err) {
               logSyncFailure('не удалось создать счёт (pay) — сеть недоступна', err, null);
               showSyncNotice('Нет связи с сервером. Попробуй ещё раз');
-              buyBtn.disabled = false;
+              payRequestInFlight = false;
+              syncBuyButtonState();
             });
         });
       }
